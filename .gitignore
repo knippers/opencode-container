@@ -1,0 +1,8 @@
+.env
+.DS_Store
+config/*
+data/*
+studio/*
+profiles/*
+workspace/*
+!.gitkeep

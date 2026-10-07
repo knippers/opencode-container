@@ -1,0 +1,11 @@
+.git
+.github
+README.md
+LICENSE
+*.zip
+.env
+config/
+data/
+studio/
+profiles/
+workspace/
