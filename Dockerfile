@@ -41,8 +41,8 @@ RUN apt-get update \
         /data/.config/opencode-profiles \
         /data/.local/share \
         /opt/opencode-studio/server \
-        /opt/opencode-studio/client \ 
-    && ln -s /data/workspace /workspace
+        /opt/opencode-studio/client \
+        /data/workspace
 
 # Runtime needs Node, but not npm, headers or the full Node image.
 COPY --from=studio-builder /usr/local/bin/node /usr/local/bin/node
@@ -73,7 +73,7 @@ RUN chmod 0755 /usr/local/bin/entrypoint.sh \
 VOLUME ["/data"] 
 
 USER opencode
-WORKDIR /workspace
+WORKDIR /data/workspace
 EXPOSE 4096 1080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
