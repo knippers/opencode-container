@@ -4,6 +4,17 @@ set -euo pipefail
 : "${HOME:?HOME must be set}"
 : "${OPENCODE_CONFIG_DIR:=${HOME}/.config/opencode}"
 
+# The container starts as root so it can fix ownership of bind-mounted host
+# folders (for example, root-owned Synology shares). It then re-runs this
+# script as the opencode user, so the services never run as root.
+if [[ "$(id -u)" -eq 0 ]]; then
+  RUN_UID="$(id -u opencode)"
+  RUN_GID="$(id -g opencode)"
+  mkdir -p "${HOME}"
+  chown -R "${RUN_UID}:${RUN_GID}" "${HOME}"
+  exec setpriv --reuid="${RUN_UID}" --regid="${RUN_GID}" --init-groups -- "$0" "$@"
+fi
+
 STUDIO_SERVER_DIR="/opt/opencode-studio/server"
 STUDIO_CLIENT_DIR="/opt/opencode-studio/client"
 

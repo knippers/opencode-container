@@ -72,7 +72,7 @@ RUN chmod 0755 /usr/local/bin/entrypoint.sh \
 
 VOLUME ["/data"] 
 
-USER opencode
+# Starts as root; entrypoint.sh drops to the opencode user after fixing ownership.
 WORKDIR /data/workspace
 EXPOSE 4096 1080
 
