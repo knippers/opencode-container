@@ -1,29 +1,52 @@
-FROM node:22-bookworm-slim
+# syntax=docker/dockerfile:1
 
 ARG OPENCODE_VERSION=1.18.32
 ARG STUDIO_VERSION=2.4.5
 
+FROM node:22-bookworm-slim AS studio-builder
+ARG STUDIO_VERSION
+WORKDIR /build/opencode-studio
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch "v${STUDIO_VERSION}" \
+      https://github.com/Microck/opencode-studio.git .
+
+WORKDIR /build/opencode-studio/client-next
+RUN npm install && npm run build
+
+WORKDIR /build/opencode-studio/server
+RUN npm install --omit=dev
+
+
+FROM debian:bookworm-slim AS runtime
+ARG OPENCODE_VERSION
+ARG TARGETARCH
+
 ENV HOME=/home/opencode \
     OPENCODE_CONFIG_DIR=/home/opencode/.config/opencode \
     NODE_ENV=production \
-    PATH=/home/opencode/.opencode/bin:$PATH
+    PATH=/usr/local/bin:$PATH
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep tini \
+    && apt-get install -y --no-install-recommends \
+        bash ca-certificates curl git ripgrep tini \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --home-dir /home/opencode --shell /bin/bash opencode \
-    && mkdir -p /home/opencode/.config/opencode \
-                /home/opencode/.config/opencode-studio \
-                /home/opencode/.config/opencode-profiles \
-                /home/opencode/.local/share \
-                /workspace \
-                /opt/opencode-studio \
-    && chown -R opencode:opencode /home/opencode /workspace /opt/opencode-studio
+    && mkdir -p \
+        /home/opencode/.config/opencode \
+        /home/opencode/.config/opencode-studio \
+        /home/opencode/.config/opencode-profiles \
+        /home/opencode/.local/share \
+        /opt/opencode-studio/server \
+        /opt/opencode-studio/client \
+        /workspace
 
-# Install the pinned OpenCode release directly from its official GitHub release.
-# TARGETARCH is supplied by Docker Buildx, allowing one workflow to publish
-# amd64 and arm64 images.
-ARG TARGETARCH
+# Runtime needs Node, but not npm, headers or the full Node image.
+COPY --from=studio-builder /usr/local/bin/node /usr/local/bin/node
+
 RUN case "${TARGETARCH}" in \
       amd64) OPENCODE_ARCH="x64" ;; \
       arm64) OPENCODE_ARCH="arm64" ;; \
@@ -37,20 +60,18 @@ RUN case "${TARGETARCH}" in \
     && rm /tmp/opencode.tar.gz \
     && opencode --version
 
-# Build the pinned OpenCode Studio release from its upstream source.
-RUN git clone --depth 1 --branch "v${STUDIO_VERSION}" \
-      https://github.com/Microck/opencode-studio.git /opt/opencode-studio \
-    && cd /opt/opencode-studio \
-    && npm install --omit=dev \
-    && chown -R opencode:opencode /opt/opencode-studio
+COPY --from=studio-builder /build/opencode-studio/server/ /opt/opencode-studio/server/
+COPY --from=studio-builder /build/opencode-studio/client-next/.next/standalone/ /opt/opencode-studio/client/
+COPY --from=studio-builder /build/opencode-studio/client-next/.next/static/ /opt/opencode-studio/client/.next/static/
+COPY --from=studio-builder /build/opencode-studio/client-next/public/ /opt/opencode-studio/client/public/
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+
 RUN chmod 0755 /usr/local/bin/entrypoint.sh \
-    && chown opencode:opencode /usr/local/bin/entrypoint.sh
+    && chown -R opencode:opencode /home/opencode /opt/opencode-studio /workspace
 
 USER opencode
 WORKDIR /workspace
-
 EXPOSE 4096 1080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
