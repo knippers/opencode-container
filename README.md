@@ -76,28 +76,35 @@ Mount them as:
 ```text
 Synology path                         Container path
 --------------------------------------------------------------
-/volume1/docker/opencode/config      /home/opencode/.config/opencode
-/volume1/docker/opencode/studio      /home/opencode/.config/opencode-studio
-/volume1/docker/opencode/profiles    /home/opencode/.config/opencode-profiles
-/volume1/docker/opencode/data        /home/opencode/.local/share
-/volume1/docker/opencode/workspace   /workspace
+/volume1/docker/opencode/config      /data/.config/opencode
+/volume1/docker/opencode/studio      /data/.config/opencode-studio
+/volume1/docker/opencode/profiles    /data/.config/opencode-profiles
+/volume1/docker/opencode/data        /data/.local/share
+/volume1/docker/opencode/workspace   /data/workspace
 ```
 
 ## Synology Container Manager
 
 1. Create `/volume1/docker/opencode/`.
 2. Create the five subdirectories shown above.
-3. Pull the image from Docker Hub:
+3. Make the directories writable by the container user. The image runs as `opencode`, which is UID/GID `1000` in the image. Over SSH on the NAS, run:
+
+   ```text
+   sudo chown -R 1000:1000 /volume1/docker/opencode
+   ```
+
+   Without this, the container fails at startup with `mkdir: cannot create directory '/data/.local': Permission denied`.
+4. Pull the image from Docker Hub:
 
    ```text
    <your-dockerhub-user>/opencode-container:latest
    ```
 
-4. Create a container from the image.
-5. Map ports `4096` and `1080`.
-6. Add the five bind mounts.
-7. Set the container to restart automatically.
-8. Start the container.
+5. Create a container from the image.
+6. Map ports `4096` and `1080`.
+7. Add the five bind mounts.
+8. Set the container to restart automatically.
+9. Start the container.
 
 Open:
 

@@ -20,7 +20,6 @@ RUN npm install && npm run build
 WORKDIR /build/opencode-studio/server
 RUN npm install --omit=dev
 
-
 FROM debian:bookworm-slim AS runtime
 ARG OPENCODE_VERSION
 ARG TARGETARCH
@@ -34,7 +33,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash ca-certificates curl git ripgrep tini \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --home-dir /home/opencode --shell /bin/bash opencode \
+    && groupadd --gid 1000 opencode \
+    && useradd --uid 1000 --gid 1000 --create-home --home-dir /home/opencode --shell /bin/bash opencode \
     && mkdir -p \
         /data/.config/opencode \
         /data/.config/opencode-studio \
