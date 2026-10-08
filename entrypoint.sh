@@ -17,8 +17,10 @@ if [[ "$(id -u)" -eq 0 ]]; then
   if ! chown -R "${RUN_UID}:${RUN_GID}" "${HOME}" 2>/dev/null; then
     echo "entrypoint: warning: could not change ownership of ${HOME}; checking write access as opencode" >&2
   fi
+  # Probe with a real write rather than `test -w`: some bind-mount drivers
+  # (for example Docker Desktop file sharing on macOS) report writable but refuse writes.
   if ! setpriv --reuid="${RUN_UID}" --regid="${RUN_GID}" --init-groups -- \
-      test -w "${HOME}"; then
+      sh -c 'probe="${HOME}/.write-probe.$$" && touch "$probe" && rm -f "$probe"' 2>/dev/null; then
     echo "entrypoint: error: user opencode (uid ${RUN_UID}) cannot write to ${HOME}." >&2
     echo "entrypoint: fix the host folder owner to ${RUN_UID}:${RUN_GID} (or grant write access in DSM), then restart." >&2
     exit 1
