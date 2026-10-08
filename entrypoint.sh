@@ -25,6 +25,8 @@ mkdir -p \
   "${HOME}/.local/share" \
   "${HOME}/workspace"
 
+cd "${HOME}/workspace"
+
 if [[ ! -f "${OPENCODE_CONFIG_DIR}/opencode.json" ]]; then
   cat > "${OPENCODE_CONFIG_DIR}/opencode.json" <<'EOF'
 {

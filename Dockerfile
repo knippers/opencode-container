@@ -72,8 +72,9 @@ RUN chmod 0755 /usr/local/bin/entrypoint.sh \
 
 VOLUME ["/data"] 
 
-# Starts as root; entrypoint.sh drops to the opencode user after fixing ownership.
-WORKDIR /data/workspace
+# Starts as root; entrypoint.sh fixes ownership, then drops to the opencode user.
+# No WORKDIR here: Docker would create it before the entrypoint runs, and that
+# fails on root-owned bind mounts.
 EXPOSE 4096 1080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
