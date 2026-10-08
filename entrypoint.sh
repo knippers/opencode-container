@@ -11,7 +11,18 @@ if [[ "$(id -u)" -eq 0 ]]; then
   RUN_UID="$(id -u opencode)"
   RUN_GID="$(id -g opencode)"
   mkdir -p "${HOME}"
-  chown -R "${RUN_UID}:${RUN_GID}" "${HOME}"
+  # Some hosts (Docker Desktop file sharing, NFS with root squash, or DSM ACLs)
+  # refuse chown on bind mounts. Warn and continue; the writability check below
+  # reports a clear error if the opencode user really cannot write there.
+  if ! chown -R "${RUN_UID}:${RUN_GID}" "${HOME}" 2>/dev/null; then
+    echo "entrypoint: warning: could not change ownership of ${HOME}; checking write access as opencode" >&2
+  fi
+  if ! setpriv --reuid="${RUN_UID}" --regid="${RUN_GID}" --init-groups -- \
+      test -w "${HOME}"; then
+    echo "entrypoint: error: user opencode (uid ${RUN_UID}) cannot write to ${HOME}." >&2
+    echo "entrypoint: fix the host folder owner to ${RUN_UID}:${RUN_GID} (or grant write access in DSM), then restart." >&2
+    exit 1
+  fi
   exec setpriv --reuid="${RUN_UID}" --regid="${RUN_GID}" --init-groups -- "$0" "$@"
 fi
 
