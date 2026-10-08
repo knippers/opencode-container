@@ -6,7 +6,7 @@ mkdir -p \
   "${HOME}/.config/opencode-studio" \
   "${HOME}/.config/opencode-profiles" \
   "${HOME}/.local/share" \
-  /workspace
+  "${HOME}/workspace
 
 if [[ ! -f "${OPENCODE_CONFIG_DIR}/opencode.json" ]]; then
   cat > "${OPENCODE_CONFIG_DIR}/opencode.json" <<'EOF'

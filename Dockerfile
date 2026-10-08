@@ -25,8 +25,8 @@ FROM debian:bookworm-slim AS runtime
 ARG OPENCODE_VERSION
 ARG TARGETARCH
 
-ENV HOME=/home/opencode \
-    OPENCODE_CONFIG_DIR=/home/opencode/.config/opencode \
+ENV HOME=/data \
+    OPENCODE_CONFIG_DIR=/data/.config/opencode \
     NODE_ENV=production \
     PATH=/usr/local/bin:$PATH
 
@@ -36,13 +36,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --home-dir /home/opencode --shell /bin/bash opencode \
     && mkdir -p \
-        /home/opencode/.config/opencode \
-        /home/opencode/.config/opencode-studio \
-        /home/opencode/.config/opencode-profiles \
-        /home/opencode/.local/share \
+        /data/.config/opencode \
+        /data/.config/opencode-studio \
+        /data/.config/opencode-profiles \
+        /data/.local/share \
         /opt/opencode-studio/server \
-        /opt/opencode-studio/client \
-        /workspace
+        /opt/opencode-studio/client \ 
+    && ln -s /data/workspace /workspace
 
 # Runtime needs Node, but not npm, headers or the full Node image.
 COPY --from=studio-builder /usr/local/bin/node /usr/local/bin/node
@@ -68,7 +68,9 @@ COPY --from=studio-builder /build/opencode-studio/client-next/public/ /opt/openc
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod 0755 /usr/local/bin/entrypoint.sh \
-    && chown -R opencode:opencode /home/opencode /opt/opencode-studio /workspace
+    && chown -R opencode:opencode /data /opt/opencode-studio
+
+VOLUME ["/data"] 
 
 USER opencode
 WORKDIR /workspace
