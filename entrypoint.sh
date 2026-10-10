@@ -31,14 +31,6 @@ fi
 STUDIO_SERVER_DIR="/opt/opencode-studio/server"
 STUDIO_CLIENT_DIR="/opt/opencode-studio/client"
 
-# Replace the Studio API placeholder baked in at build time with the runtime value.
-# Runs as opencode, which owns the files under /opt/opencode-studio.
-STUDIO_API_URL_VALUE="${STUDIO_API_URL:-http://127.0.0.1:1920/api}"
-STUDIO_API_URL_ESCAPED="$(printf '%s' "${STUDIO_API_URL_VALUE}" | sed -e 's/[\\&|]/\\&/g')"
-while IFS= read -r studio_file; do
-  sed -i "s|__STUDIO_API_URL__|${STUDIO_API_URL_ESCAPED}|g" "${studio_file}"
-done < <(grep -rl '__STUDIO_API_URL__' "${STUDIO_CLIENT_DIR}" || true)
-
 mkdir -p \
   "${OPENCODE_CONFIG_DIR}" \
   "${HOME}/.config/opencode-studio" \

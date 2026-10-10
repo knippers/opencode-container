@@ -154,7 +154,7 @@ persistent configuration.
 
 The image uses pinned upstream versions at build time. To upgrade:
 
-1. Update `OPENCODE_VERSION` and/or `STUDIO_VERSION` in the Dockerfile.
+1. Update `OPENCODE_VERSION` and/or `STUDIO_REF` (a commit in `knippers/opencode-studio`) in the Dockerfile.
 2. Commit and push.
 3. GitHub Actions builds and publishes the image.
 4. Pull the new image in Synology Container Manager.
@@ -177,8 +177,7 @@ Docker Hub password.
 The workflow publishes:
 
 - `latest` from the default branch
-- `vX.Y.Z` when a matching Git tag is pushed
-- `sha-<commit>` for immutable identification
+- an incrementing build number (the GitHub Actions run number), such as `42`
 
 The workflow builds:
 
