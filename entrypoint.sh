@@ -31,6 +31,14 @@ fi
 STUDIO_SERVER_DIR="/opt/opencode-studio/server"
 STUDIO_CLIENT_DIR="/opt/opencode-studio/client"
 
+# Replace the Studio API placeholder baked in at build time with the runtime value.
+# Runs as opencode, which owns the files under /opt/opencode-studio.
+STUDIO_API_URL_VALUE="${STUDIO_API_URL:-http://127.0.0.1:1920/api}"
+STUDIO_API_URL_ESCAPED="$(printf '%s' "${STUDIO_API_URL_VALUE}" | sed -e 's/[\\&|]/\\&/g')"
+while IFS= read -r studio_file; do
+  sed -i "s|__STUDIO_API_URL__|${STUDIO_API_URL_ESCAPED}|g" "${studio_file}"
+done < <(grep -rl '__STUDIO_API_URL__' "${STUDIO_CLIENT_DIR}" || true)
+
 mkdir -p \
   "${OPENCODE_CONFIG_DIR}" \
   "${HOME}/.config/opencode-studio" \
@@ -50,14 +58,30 @@ fi
 
 declare -A PIDS=()
 
-# Starts a command in the given working directory as a background job,
-# records its PID under $name, and logs the start for container visibility.
+# Runs one service and restarts it whenever it exits, so a service that stops
+# on its own (for example after an idle timeout) does not stop the container.
+# Each exit is logged with the service name and exit code.
+supervise() {
+  local name="$1" dir="$2" child="" code=0
+  shift 2
+  trap '[[ -n "${child}" ]] && kill "${child}" 2>/dev/null; exit 0' TERM INT
+  while true; do
+    ( cd "${dir}" && exec "$@" ) &
+    child=$!
+    code=0
+    wait "${child}" || code=$?
+    echo "entrypoint: ${name} exited (code ${code}); restarting in 5s" >&2
+    sleep 5
+  done
+}
+
+# Starts a supervisor for one service in the background and records its PID.
 start_service() {
   local name="$1" dir="$2"
   shift 2
-  ( cd "${dir}" && exec "$@" ) &
+  supervise "${name}" "${dir}" "$@" &
   PIDS["${name}"]=$!
-  echo "entrypoint: started ${name} (pid ${PIDS[${name}]})" >&2
+  echo "entrypoint: started ${name} (supervisor pid ${PIDS[${name}]})" >&2
 }
 
 cleanup() {
@@ -78,10 +102,5 @@ start_service studio-server "${STUDIO_SERVER_DIR}" \
 start_service studio-client "${STUDIO_CLIENT_DIR}" \
   env PORT=1080 HOSTNAME=0.0.0.0 node server.js
 
-set +e
-wait -n "${PIDS[@]}"
-exit_code=$?
-set -e
-
-echo "entrypoint: a service exited (code ${exit_code}); shutting down" >&2
-exit "${exit_code}"
+# Supervisors never exit on their own; this blocks until a signal stops the container.
+wait

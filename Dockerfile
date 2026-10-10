@@ -5,6 +5,7 @@ ARG STUDIO_VERSION=2.4.5
 
 FROM node:22-bookworm-slim AS studio-builder
 ARG STUDIO_VERSION
+# Domain settings are runtime variables (STUDIO_ORIGIN, STUDIO_API_URL), not build args.
 WORKDIR /build/opencode-studio
 
 RUN apt-get update \
@@ -14,8 +15,23 @@ RUN apt-get update \
 RUN git clone --depth 1 --branch "v${STUDIO_VERSION}" \
       https://github.com/Microck/opencode-studio.git .
 
+# Remote access patches. Each grep fails the build if the target line is missing,
+# so a Studio version change cannot silently skip a patch.
+#   - backend listens on all container interfaces instead of 127.0.0.1
+#   - CORS adds STUDIO_ORIGIN from the container environment at runtime
+RUN set -e \
+    && grep -q "app.listen(port, '127.0.0.1'" server/index.js \
+    && sed -i "s/app.listen(port, '127.0.0.1'/app.listen(port, '0.0.0.0'/" server/index.js \
+    && grep -q "^    'https://opencode.micr.dev',\$" server/lib/cors-policy.js \
+    && sed -i "s#^    'https://opencode.micr.dev',\$#    ...(process.env.STUDIO_ORIGIN ? [process.env.STUDIO_ORIGIN] : []),\n    'https://opencode.micr.dev',#" server/lib/cors-policy.js \
+    && grep -q "process.env.STUDIO_ORIGIN" server/lib/cors-policy.js
+
 WORKDIR /build/opencode-studio/client-next
-RUN npm install && npm run build
+# NEXT_PUBLIC_* values are inlined at build time, so a placeholder is baked in here.
+# entrypoint.sh replaces it with STUDIO_API_URL when the container starts.
+ENV NEXT_PUBLIC_API_URL=__STUDIO_API_URL__
+RUN npm install && npm run build \
+    && grep -rq '__STUDIO_API_URL__' .next
 
 WORKDIR /build/opencode-studio/server
 RUN npm install --omit=dev
