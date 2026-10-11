@@ -1,17 +1,16 @@
 # syntax=docker/dockerfile:1
 
-ARG OPENCODE_VERSION=1.18.32
+ARG OPENCODE_VERSION=1.19.0
 # Pinned commit of https://github.com/knippers/opencode-studio (fork of Microck/opencode-studio).
 ARG STUDIO_REF=ceadd87b306e3e61b6aa5c83db3868f63db2aceb
 
 # Builds the OpenCode Studio client and server.
-FROM node:24-bookworm-slim AS studio-builder
+# Alpine (musl) is used here too, so native dependencies match the runtime libc.
+FROM node:24-alpine AS studio-builder
 ARG STUDIO_REF
 WORKDIR /build
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates git
 
 RUN git clone https://github.com/knippers/opencode-studio.git opencode-studio \
     && cd opencode-studio \
@@ -28,18 +27,16 @@ WORKDIR /build/opencode-studio/server
 RUN npm install --omit=dev --ignore-scripts \
     && rm -rf /root/.npm
 
-# Downloads the OpenCode binary so curl is not needed in the runtime image.
-FROM debian:bookworm-slim AS opencode-fetch
+# Downloads the musl OpenCode binary, so curl is not needed in the runtime image.
+FROM node:24-alpine AS opencode-fetch
 ARG OPENCODE_VERSION
 ARG TARGETARCH
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates curl
 
 RUN case "${TARGETARCH}" in \
-      amd64) OPENCODE_ARCH="x64" ;; \
-      arm64) OPENCODE_ARCH="arm64" ;; \
+      amd64) OPENCODE_ARCH="x64-musl" ;; \
+      arm64) OPENCODE_ARCH="arm64-musl" ;; \
       *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
     && curl -fsSL \
@@ -50,24 +47,23 @@ RUN case "${TARGETARCH}" in \
     && rm /tmp/opencode.tar.gz \
     && /usr/local/bin/opencode --version
 
-FROM debian:bookworm-slim AS runtime
-ARG TARGETARCH
+FROM node:24-alpine AS runtime
 
 ENV HOME=/data \
     OPENCODE_CONFIG_DIR=/data/.config/opencode \
     NODE_ENV=production \
     PATH=/usr/local/bin:$PATH
 
-# Only the Node binary is copied from the builder; npm and headers are not shipped.
-# The runtime is Debian's slim base, so Node's shared libraries come from the same base.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        bash ca-certificates git ripgrep tini \
-    && rm -rf /var/lib/apt/lists/* \
-    && find /usr/share/doc /usr/share/man /usr/share/info /var/cache -mindepth 1 -delete \
-    && find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' -exec rm -rf {} + \
-    && groupadd --gid 1000 opencode \
-    && useradd --uid 1000 --gid 1000 --create-home --home-dir /home/opencode --shell /bin/bash opencode \
+# Node comes from the base image. The apk packages cover what entrypoint.sh and OpenCode need:
+# bash (entrypoint uses bash syntax), git and ripgrep (OpenCode tools), tini (PID 1),
+# setpriv (util-linux's; BusyBox setpriv lacks --reuid and --init-groups),
+# libgcc and libstdc++ (OpenCode binary runtime).
+RUN apk add --no-cache \
+        bash ca-certificates git libgcc libstdc++ ripgrep setpriv tini \
+    && rm -rf /usr/share/man /usr/share/doc /usr/share/info \
+    && deluser node \
+    && addgroup -g 1000 opencode \
+    && adduser -D -u 1000 -G opencode -h /home/opencode -s /bin/bash opencode \
     && mkdir -p \
         /data/.config/opencode \
         /data/.config/opencode-studio \
@@ -77,7 +73,6 @@ RUN apt-get update \
         /opt/opencode-studio/client \
         /data/workspace
 
-COPY --from=studio-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=opencode-fetch /usr/local/bin/opencode /usr/local/bin/opencode
 
 COPY --from=studio-builder /build/opencode-studio/server/ /opt/opencode-studio/server/
@@ -101,4 +96,4 @@ EXPOSE 4096 1080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:4096/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
