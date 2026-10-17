@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG OPENCODE_VERSION=1.19.0
+ARG OPENCODE_VERSION=1.19.3
 # Pinned commit of https://github.com/knippers/opencode-studio (fork of Microck/opencode-studio).
 ARG STUDIO_REF=ceadd87b306e3e61b6aa5c83db3868f63db2aceb
 
